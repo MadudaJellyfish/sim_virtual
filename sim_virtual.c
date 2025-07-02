@@ -4,33 +4,13 @@
 
 struct sim_virtual
 {
+    unsigned endereco_fisico; // endereço lógico da página
     int pag_referenciada; // 1 se a página foi referenciada, 0 caso contrário
     int pag_modificada;   // 1 se a página foi modificada, 0
     int ultimo_acesso; // último acesso à página
 };
 
 typedef struct sim_virtual SimVirtual;
-
-unsigned find_largest_adress(const char* filename) {
-    FILE* file = fopen(filename, "r");
-    if (!file) {
-        perror("Erro ao abrir o arquivo");
-        exit(1);
-    }
-
-    unsigned largest_address = 0;
-    unsigned addr;
-    char c;
-
-    while (fscanf(file, "%x %c", &addr, c) == 1) {
-        if (addr > largest_address) {
-            largest_address = addr;
-        }
-    }
-
-    fclose(file);
-    return largest_address;
-}
 
 int main(int argc, char* argv[])
 {
@@ -69,25 +49,20 @@ int main(int argc, char* argv[])
     int qtd_pag_mem = 0;
     qtd_pag_mem = (tam_memoria_fisica*1024) / tam_pag_mem;   
 
-    //cálculo da quantidade de páginas virtuais
-    unsigned largest_address = find_largest_adress(nome_arquivo_acessos);
-    int qtd_pag_virtuais = 0;
-    qtd_pag_virtuais = (largest_address / tam_pag_mem) + 1;
-
-    //alocação do vetor de páginas virtuais
-    SimVirtual* paginas_virtuais = (SimVirtual*)malloc(qtd_pag_virtuais * sizeof(SimVirtual));
-    if(!paginas_virtuais) {
-        perror("Erro ao alocar memória para páginas virtuais");
-        exit(1);
-    }
-
     //alocação do vetor de páginas físicas
-    SimVirtual* paginas_físicas = (SimVirtual*)malloc(qtd_pag_virtuais * sizeof(SimVirtual));
-    if(!paginas_físicas) {
+    SimVirtual* buffer_mem_fisica = (SimVirtual*)malloc(qtd_pag_mem * sizeof(SimVirtual));
+    if(!buffer_mem_fisica) {
         perror("Erro ao alocar memória para paginas físicas");
         exit(1);
     }
 
-   
+    for (int i = 0; i < qtd_pag_mem; i++)
+    {
+        buffer_mem_fisica[i].endereco_fisico = 0; // inicializa o endereço físico da página
+        buffer_mem_fisica[i].pag_referenciada = 0; // inicializa a página como não referenciada
+        buffer_mem_fisica[i].pag_modificada = 0; // inicializa a página como não modificada
+        buffer_mem_fisica[i].ultimo_acesso = 0; // inicializa o último
+    }
+    
 
 }
