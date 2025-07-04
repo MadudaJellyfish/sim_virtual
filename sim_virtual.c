@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 struct sim_virtual
 {
@@ -15,7 +16,7 @@ struct sim_virtual
 struct param_sim
 {
     int qtd_pag_mem;
-    char* nome_arquivo_acessos;
+    char nome_arquivo_acessos[50];
     int tam_page;
 };
 
@@ -78,7 +79,7 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
             //alguma página precisa ser removida, neste caso, a com o acesso mais antigo
             if (was_page_inserted==0)
             {
-                int uso_mais_antigo = 100000000000000000000;
+                int uso_mais_antigo = INT_MAX;
                 int i_older_page = 0;
                 for (int i = 0; i < param.qtd_pag_mem; i++)
                 {
@@ -89,7 +90,7 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
                     } 
                 }
 
-                if(buffer_mem_fisica[i_older_page].pag_modificada == 1) *qtd_pgs_sujas++;
+                if(buffer_mem_fisica[i_older_page].pag_modificada == 1) (*qtd_pgs_sujas)++;
 
                 buffer_mem_fisica[i_older_page].endereco_fisico = page;
                 buffer_mem_fisica[i_older_page].pag_modificada = 0;
@@ -98,7 +99,7 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
 
             }
             
-            *qtd_pgs_faults++;
+            (*qtd_pgs_faults)++;
         }
 
         time++;
@@ -107,6 +108,12 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
     
     
 }
+void second_chance_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
+{
+    
+}
+
+
 
 int main(int argc, char* argv[])
 {
@@ -162,23 +169,24 @@ int main(int argc, char* argv[])
     printf("Tamanho memoria fisica: %d MB\n", tam_memoria_fisica);
     printf("Tamanho das paginas: %d KB\n", tam_pag_mem);
     printf("Algoritmo de Substituicao: %s\n", tipo_algoritmo);
+
     if(strcmp(tipo_algoritmo, "LRU")==0)
     {
         lru_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
     }
 
-    else if(strcmp(tipo_algoritmo, "2nd chance")==0)
-    {
-        second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    }
-    else if(strcmp(tipo_algoritmo, "clock")==0)
-    {
-        clock_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    }
-    else //algoritmo ótimo
-    {
-        algoritmo_otimo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    }
+    // else if(strcmp(tipo_algoritmo, "2nd chance")==0)
+    // {
+    //     second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    // }
+    // else if(strcmp(tipo_algoritmo, "clock")==0)
+    // {
+    //     clock_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    // }
+    // else //algoritmo ótimo
+    // {
+    //     algoritmo_otimo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    // }
 
     printf("Numero de faltas de páginas: %d\n", qtd_pgs_faults);
     printf("Numero de páginas escritas: %d\n", qtd_pgs_sujas);
