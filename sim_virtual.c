@@ -41,15 +41,18 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
     
     while (fscanf(arq_acessos, "%x %c ", &addr, &r_or_w) == 2)
     {
+        
         int page = addr>>shift_page;
+       // printf("acesso %d: endereco=%x tipo=%c page=%d\n", time, addr, r_or_w, page);
         int is_page_in_mem = 0; //0 se não estiver, 1 c.c.
         for (int i = 0; i < param.qtd_pag_mem; i++)
         {
+           // printf("   >> HIT na página %d (frame %d)\n", page, i);
             //Se a página estiver na memória
-            if(page == buffer_mem_fisica[i].endereco_fisico)
+            if(buffer_mem_fisica[i].em_uso == 1 && page == buffer_mem_fisica[i].endereco_fisico)
             {
-                if(r_or_w=='W') buffer_mem_fisica[i].pag_modificada = 1;
-                else buffer_mem_fisica[i].pag_referenciada = 1;
+                if (r_or_w == 'W') buffer_mem_fisica[i].pag_modificada = 1; // Marca como suja 
+                buffer_mem_fisica[i].pag_referenciada = 1; //hit no frame
                 buffer_mem_fisica[i].ultimo_acesso = time;
                 is_page_in_mem = 1;
                 break;
@@ -65,8 +68,10 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
                 if(buffer_mem_fisica[i].em_uso == 0)
                 {
                     buffer_mem_fisica[i].endereco_fisico = page;
-                    buffer_mem_fisica[i].pag_modificada = 0;
-                    buffer_mem_fisica[i].pag_referenciada = 0;
+                    if(r_or_w == 'W') buffer_mem_fisica[i].pag_modificada = 1;
+                    else buffer_mem_fisica[i].pag_modificada = 0;
+                    buffer_mem_fisica[i].pag_referenciada = 1;
+
                     buffer_mem_fisica[i].ultimo_acesso = time;
                     buffer_mem_fisica[i].em_uso = 1;
 
@@ -92,9 +97,15 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
 
                 if(buffer_mem_fisica[i_older_page].pag_modificada == 1) (*qtd_pgs_sujas)++;
 
+                //carrega página nova
                 buffer_mem_fisica[i_older_page].endereco_fisico = page;
-                buffer_mem_fisica[i_older_page].pag_modificada = 0;
-                buffer_mem_fisica[i_older_page].pag_referenciada = 0;
+                if (r_or_w == 'W') {
+                    buffer_mem_fisica[i_older_page].pag_modificada = 1;
+                } else {
+                    buffer_mem_fisica[i_older_page].pag_modificada = 0;
+                }
+            
+                buffer_mem_fisica[i_older_page].pag_referenciada = 1;
                 buffer_mem_fisica[i_older_page].ultimo_acesso = time;
 
             }
@@ -110,7 +121,95 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
 }
 void second_chance_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
 {
+    static int ponteiro_vitima = 0; //está apontando para o primeiro frame
     
+    FILE* arq_acessos;
+    if(!(arq_acessos = fopen(param.nome_arquivo_acessos, "r")))
+    {
+        printf("Nao foi possivel abrir o arquivo %s!!!\n", param.nome_arquivo_acessos);
+        exit(1);
+    }
+
+    unsigned addr;
+    char r_or_w;
+
+    unsigned shift_page = log2(param.tam_page*1024);
+    int time = 0;
+    
+    while (fscanf(arq_acessos, "%x %c ", &addr, &r_or_w) == 2)
+    {
+        int page = addr>>shift_page;
+        int is_page_in_mem = 0; //0 se não estiver, 1 c.c.
+        for (int i = 0; i < param.qtd_pag_mem; i++)
+        {
+            //Se a página estiver na memória
+            if(buffer_mem_fisica[i].em_uso == 1 && page == buffer_mem_fisica[i].endereco_fisico)
+            {
+                if (r_or_w == 'W') buffer_mem_fisica[i].pag_modificada = 1; // Marcar como suja imediatamente
+                buffer_mem_fisica[i].pag_referenciada = 1;
+                buffer_mem_fisica[i].ultimo_acesso = time;
+                is_page_in_mem = 1;
+                break;
+            }
+        }
+
+        int was_page_inserted = 0;
+        //caso a página não esteja na memória é gerado um page fault
+        if(is_page_in_mem==0)
+        {
+            for (int i = 0; i < param.qtd_pag_mem; i++)
+            {
+                if(buffer_mem_fisica[i].em_uso == 0)
+                {
+                    buffer_mem_fisica[i].endereco_fisico = page;
+                    if(r_or_w == 'W') buffer_mem_fisica[i].pag_modificada = 1;
+                    else buffer_mem_fisica[i].pag_modificada = 0;
+                    buffer_mem_fisica[i].pag_referenciada = 1;
+                    buffer_mem_fisica[i].ultimo_acesso = time;
+                    buffer_mem_fisica[i].em_uso = 1;
+
+                    was_page_inserted = 1;
+                    break;
+                }
+            }
+            
+
+            //aplicar o second chance caso não tenha sido possível inserir a página
+            if (was_page_inserted==0)
+            {   
+                while (1) //enquanto não conseguir remover uma página continuar nesse loop
+                {
+                    if (buffer_mem_fisica[ponteiro_vitima].pag_referenciada == 0)
+                    {
+                        if(buffer_mem_fisica[ponteiro_vitima].pag_modificada == 1) (*qtd_pgs_sujas)++;
+
+                        buffer_mem_fisica[ponteiro_vitima].endereco_fisico = page;
+                        if (r_or_w == 'W') {
+                        buffer_mem_fisica[ponteiro_vitima].pag_modificada = 1;
+                        } else {
+                        buffer_mem_fisica[ponteiro_vitima].pag_modificada = 0;
+                        }
+                        
+                        buffer_mem_fisica[ponteiro_vitima].pag_referenciada = 1;
+                        buffer_mem_fisica[ponteiro_vitima].ultimo_acesso = time;
+                        ponteiro_vitima = (ponteiro_vitima + 1) % param.qtd_pag_mem;
+                        break;
+                    }
+                    else //continuo a busca
+                    {
+                        buffer_mem_fisica[ponteiro_vitima].pag_referenciada = 0;
+                        ponteiro_vitima = (ponteiro_vitima + 1) % param.qtd_pag_mem;
+                    }
+                }
+
+            }
+            
+            (*qtd_pgs_faults)++;
+        }
+
+        time++;
+        
+    }
 }
 
 
@@ -151,10 +250,14 @@ int main(int argc, char* argv[])
     //cálculo da quantidade de páginas
     int qtd_pag_mem = 0;
     qtd_pag_mem = (tam_memoria_fisica*1024) / tam_pag_mem;   
-
     //alocação do vetor de páginas físicas
     SimVirtual buffer_mem_fisica[qtd_pag_mem]; 
-    memset(buffer_mem_fisica, 0, sizeof(buffer_mem_fisica));
+    //memset(buffer_mem_fisica, 0, sizeof(buffer_mem_fisica));
+    for (int i = 0; i < qtd_pag_mem; i++)
+    {
+        buffer_mem_fisica[i].em_uso = 0;
+    }
+    
 
     int qtd_pgs_sujas = 0;
     int qtd_pgs_faults = 0;
@@ -175,10 +278,10 @@ int main(int argc, char* argv[])
         lru_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
     }
 
-    // else if(strcmp(tipo_algoritmo, "2nd chance")==0)
-    // {
-    //     second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    // }
+    else if(strcmp(tipo_algoritmo, "2nd_chance")==0)
+    {
+        second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    }
     // else if(strcmp(tipo_algoritmo, "clock")==0)
     // {
     //     clock_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
