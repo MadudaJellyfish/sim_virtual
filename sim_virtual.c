@@ -4,6 +4,8 @@
 #include <math.h>
 #include <limits.h>
 
+#define MAX_ACESSOS 1000000
+
 struct sim_virtual
 {
     unsigned endereco_fisico; // endereço lógico da página
@@ -212,6 +214,180 @@ void second_chance_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int
     }
 }
 
+void clock_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
+{
+    int ponteiro_relogio = 0;
+
+    FILE* arq_acessos;
+    if(!(arq_acessos = fopen(param.nome_arquivo_acessos, "r")))
+    {
+        printf("Nao foi possivel abrir o arquivo %s!!!\n", param.nome_arquivo_acessos);
+        exit(1);
+    }
+    unsigned addr;
+    char r_or_w;
+    unsigned shift_page = log2(param.tam_page*1024);
+    int time = 0;
+
+    while (fscanf(arq_acessos, "%x %c ", &addr, &r_or_w) == 2)
+    {
+        int page = addr >> shift_page;
+        int is_page_in_mem = 0;
+
+        for (int i = 0; i < param.qtd_pag_mem; i++)
+        {
+            if (buffer_mem_fisica[i].em_uso == 1 && page == buffer_mem_fisica[i].endereco_fisico)
+            {
+                buffer_mem_fisica[i].pag_referenciada = 1;
+                buffer_mem_fisica[i].ultimo_acesso = time;
+                if (r_or_w == 'W') buffer_mem_fisica[i].pag_modificada = 1;
+                is_page_in_mem = 1;
+                break;
+            }
+        }
+
+        if (!is_page_in_mem)
+        {
+            int inserida = 0;
+            for (int i = 0; i < param.qtd_pag_mem; i++)
+            {
+                if (buffer_mem_fisica[i].em_uso == 0)
+                {
+                    buffer_mem_fisica[i].endereco_fisico = page;
+                    buffer_mem_fisica[i].pag_modificada = (r_or_w == 'W') ? 1 : 0;
+                    buffer_mem_fisica[i].pag_referenciada = 1;
+                    buffer_mem_fisica[i].ultimo_acesso = time;
+                    buffer_mem_fisica[i].em_uso = 1;
+                    inserida = 1;
+                    break;
+                }
+            }
+
+            if (!inserida)
+            {
+                while (1)
+                {
+                    if (buffer_mem_fisica[ponteiro_relogio].pag_referenciada == 0)
+                    {
+                        if (buffer_mem_fisica[ponteiro_relogio].pag_modificada)
+                            (*qtd_pgs_sujas)++;
+
+                        buffer_mem_fisica[ponteiro_relogio].endereco_fisico = page;
+                        buffer_mem_fisica[ponteiro_relogio].pag_modificada = (r_or_w == 'W') ? 1 : 0;
+                        buffer_mem_fisica[ponteiro_relogio].pag_referenciada = 1;
+                        buffer_mem_fisica[ponteiro_relogio].ultimo_acesso = time;
+
+                        ponteiro_relogio = (ponteiro_relogio + 1) % param.qtd_pag_mem;
+                        break;
+                    }
+                    else
+                    {
+                        buffer_mem_fisica[ponteiro_relogio].pag_referenciada = 0;
+                        ponteiro_relogio = (ponteiro_relogio + 1) % param.qtd_pag_mem;
+                    }
+                }
+            }
+
+            (*qtd_pgs_faults)++;
+        }
+
+        time++;
+    }
+
+    fclose(arq_acessos);
+}
+
+
+void algoritmo_otimo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
+{
+    FILE* arq_acessos;
+    if (!(arq_acessos = fopen(param.nome_arquivo_acessos, "r")))
+    {
+        printf("Nao foi possivel abrir o arquivo %s!!!\n", param.nome_arquivo_acessos);
+        exit(1);
+    }
+
+    unsigned addr_list[MAX_ACESSOS];
+    char rw_list[MAX_ACESSOS];
+    int total_acessos = 0;
+    unsigned shift_page = log2(param.tam_page * 1024);
+    
+    while (fscanf(arq_acessos, "%x %c ", &addr_list[total_acessos], &rw_list[total_acessos]) == 2)
+    {
+        total_acessos++;
+    }
+
+    fclose(arq_acessos);
+
+    for (int atual = 0; atual < total_acessos; atual++)
+    {
+        unsigned page = addr_list[atual] >> shift_page;
+        char tipo = rw_list[atual];
+        int is_page_in_mem = 0;
+
+        for (int i = 0; i < param.qtd_pag_mem; i++)
+        {
+            if (buffer_mem_fisica[i].em_uso == 1 && buffer_mem_fisica[i].endereco_fisico == page)
+            {
+                buffer_mem_fisica[i].pag_referenciada = 1;
+                if (tipo == 'W') buffer_mem_fisica[i].pag_modificada = 1;
+                is_page_in_mem = 1;
+                break;
+            }
+        }
+
+        if (!is_page_in_mem)
+        {
+            int inserida = 0;
+            for (int i = 0; i < param.qtd_pag_mem; i++)
+            {
+                if (!buffer_mem_fisica[i].em_uso)
+                {
+                    buffer_mem_fisica[i].endereco_fisico = page;
+                    buffer_mem_fisica[i].pag_modificada = (tipo == 'W') ? 1 : 0;
+                    buffer_mem_fisica[i].pag_referenciada = 1;
+                    buffer_mem_fisica[i].em_uso = 1;
+                    inserida = 1;
+                    break;
+                }
+            }
+
+            if (!inserida)
+            {
+                int mais_distante = -1, indice_vitima = -1;
+
+                for (int i = 0; i < param.qtd_pag_mem; i++)
+                {
+                    int distancia = INT_MAX;
+                    for (int j = atual + 1; j < total_acessos; j++)
+                    {
+                        if ((addr_list[j] >> shift_page) == buffer_mem_fisica[i].endereco_fisico)
+                        {
+                            distancia = j;
+                            break;
+                        }
+                    }
+
+                    if (distancia > mais_distante)
+                    {
+                        mais_distante = distancia;
+                        indice_vitima = i;
+                    }
+                }
+
+                if (buffer_mem_fisica[indice_vitima].pag_modificada)
+                    (*qtd_pgs_sujas)++;
+
+                buffer_mem_fisica[indice_vitima].endereco_fisico = page;
+                buffer_mem_fisica[indice_vitima].pag_modificada = (tipo == 'W') ? 1 : 0;
+                buffer_mem_fisica[indice_vitima].pag_referenciada = 1;
+            }
+
+            (*qtd_pgs_faults)++;
+        }
+    }
+}
+
 
 
 int main(int argc, char* argv[])
@@ -282,14 +458,14 @@ int main(int argc, char* argv[])
     {
         second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
     }
-    // else if(strcmp(tipo_algoritmo, "clock")==0)
-    // {
-    //     clock_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    // }
-    // else //algoritmo ótimo
-    // {
-    //     algoritmo_otimo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
-    // }
+    else if(strcmp(tipo_algoritmo, "clock")==0)
+    {
+        clock_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    }
+    else //algoritmo ótimo
+    {
+        algoritmo_otimo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
+    }
 
     printf("Numero de faltas de páginas: %d\n", qtd_pgs_faults);
     printf("Numero de páginas escritas: %d\n", qtd_pgs_sujas);
