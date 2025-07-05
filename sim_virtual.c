@@ -27,6 +27,7 @@ typedef struct param_sim Param_Sim;
 typedef struct sim_virtual SimVirtual;
 
 void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
+
 {
     FILE* arq_acessos;
     if(!(arq_acessos = fopen(param.nome_arquivo_acessos, "r")))
@@ -121,6 +122,7 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
     
     
 }
+
 void second_chance_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
 {
     static int ponteiro_vitima = 0; //está apontando para o primeiro frame
@@ -297,7 +299,6 @@ void clock_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pg
     fclose(arq_acessos);
 }
 
-
 void algoritmo_otimo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
 {
     FILE* arq_acessos;
@@ -388,8 +389,6 @@ void algoritmo_otimo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pg
     }
 }
 
-
-
 int main(int argc, char* argv[])
 {
     if(argc != 5) {
@@ -434,7 +433,6 @@ int main(int argc, char* argv[])
         buffer_mem_fisica[i].em_uso = 0;
     }
     
-
     int qtd_pgs_sujas = 0;
     int qtd_pgs_faults = 0;
 
@@ -453,7 +451,6 @@ int main(int argc, char* argv[])
     {
         lru_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
     }
-
     else if(strcmp(tipo_algoritmo, "2nd_chance")==0)
     {
         second_chance_algoritmo(params, buffer_mem_fisica, &qtd_pgs_sujas, &qtd_pgs_faults);
