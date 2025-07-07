@@ -118,6 +118,8 @@ void lru_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_
         time++;
         
     }
+
+    fclose(arq_acessos);
     
     
 }
@@ -220,6 +222,8 @@ void second_chance_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int
         time++;
         
     }
+
+    fclose(arq_acessos);
 }
 
 void clock_algoritmo(Param_Sim param, SimVirtual* buffer_mem_fisica, int* qtd_pgs_sujas, int* qtd_pgs_faults)
